@@ -148,72 +148,53 @@ void loop() {
 
 void displayReadings(float t, float h, float p, float a, float hi, int soil)
 {
-    // Print labels
-    tft.setTextColor(ILI9341_GREEN,ILI9341_BLACK);
-    tft.setTextSize(2);
-
     // Define label positions
     int startX = 10;
     int startY = 10;
     int yGap = 50;
-    int rectHeight = 20; // Adjust as needed
+    int rectHeight = 40; // Adjust as needed to fit two lines of text
+    int rectWidth = 300; // Adjust as needed
 
-    // Clear area and Print Temperature
-    //tft.fillRect(startX, startY, 300, rectHeight, ILI9341_WHITE);
-    tft.setTextColor(ILI9341_RED,ILI9341_BLACK);
+    // Clear the screen with a white background
+    tft.fillScreen(ILI9341_WHITE);
 
-    tft.setCursor(startX, startY);
-    tft.print("Temperature: ");
-    tft.print(t, 2);  // Value rounded to 2 decimal places
-    tft.println(" C"); // Unit
+    // Function to draw text with dividers
+    auto drawTextWithDivider = [&](int x, int y, const char* label, float value, const char* unit) {
+        // Set text color and size
+        tft.setTextColor(ILI9341_BLACK, ILI9341_WHITE);
+        tft.setTextSize(2); // Set text size to 2
 
-    // Clear area and Print Humidity
-    //tft.fillRect(startX, startY + yGap, 300, rectHeight, ILI9341_BLACK);
-    tft.setCursor(startX, startY + yGap);
-    tft.setTextColor(ILI9341_GREEN,ILI9341_BLACK);
+        // Print the label
+        tft.setCursor(x, y);
+        tft.print(label);
 
-    tft.print("Humidity: ");
-    tft.print(h, 2);  // Value rounded to 2 decimal places
-    tft.println(" %"); // Unit
+        // Print the value on the next line
+        tft.setCursor(x, y + 20);
+        tft.print(value, 2);  // Value rounded to 2 decimal places
+        tft.print(" ");
+        tft.println(unit);
+    };
 
-    // Clear area and Print Pressure
-   // tft.fillRect(startX, startY + 2 * yGap, 300, rectHeight, ILI9341_BLACK);
-    tft.setCursor(startX, startY + 2 * yGap);
-    tft.setTextColor(ILI9341_PINK,ILI9341_BLACK);
+    // Draw text with dividers
+    drawTextWithDivider(startX, startY, "Temperature: ", t, "C");
+    tft.drawLine(startX, startY + rectHeight, startX + rectWidth, startY + rectHeight, ILI9341_BLACK);
 
-    tft.print("Pressure: ");
-    tft.print(p, 2);  // Value rounded to 2 decimal places
-    tft.println(" Pa"); // Unit
+    drawTextWithDivider(startX, startY + yGap, "Humidity: ", h, "%");
+    tft.drawLine(startX, startY + yGap + rectHeight, startX + rectWidth, startY + yGap + rectHeight, ILI9341_BLACK);
 
-    // Clear area and Print Altitude
-    //tft.fillRect(startX, startY + 3 * yGap, 300, rectHeight, ILI9341_BLACK);
-    tft.setCursor(startX, startY + 3 * yGap);
-    tft.setTextColor(ILI9341_CYAN,ILI9341_BLACK);
+    drawTextWithDivider(startX, startY + 2 * yGap, "Pressure: ", p, "Pa");
+    tft.drawLine(startX, startY + 2 * yGap + rectHeight, startX + rectWidth, startY + 2 * yGap + rectHeight, ILI9341_BLACK);
 
-    tft.print("Altitude: ");
-    tft.print(a, 2);  // Value rounded to 2 decimal places
-    tft.println(" m"); // Unit
+    drawTextWithDivider(startX, startY + 3 * yGap, "Altitude: ", a, "m");
+    tft.drawLine(startX, startY + 3 * yGap + rectHeight, startX + rectWidth, startY + 3 * yGap + rectHeight, ILI9341_BLACK);
 
     // Convert soil reading
-    float soilPercentage = 100 -((soil / 4095.0) * 100.0);
+    float soilPercentage = 100 - ((soil / 4095.0) * 100.0);
+    drawTextWithDivider(startX, startY + 4 * yGap, "Soil: ", soilPercentage, "%");
+    tft.drawLine(startX, startY + 4 * yGap + rectHeight, startX + rectWidth, startY + 4 * yGap + rectHeight, ILI9341_BLACK);
 
-    // Clear area and Print Soil
-    //tft.fillRect(startX, startY + 4 * yGap, 300, rectHeight, ILI9341_BLACK);
-    tft.setCursor(startX, startY + 4 * yGap);
-    tft.setTextColor(ILI9341_YELLOW,ILI9341_BLACK);
-
-    tft.print("Soil: ");
-    tft.print(soilPercentage, 2);  // Value rounded to 2 decimal places
-    tft.println(" %"); // Unit
-
-    // Clear area and Print Heat Index
-    //tft.fillRect(startX, startY + 5 * yGap, 300, rectHeight, ILI9341_BLACK);
-    tft.setCursor(startX, startY + 5 * yGap);
-    tft.setTextColor(ILI9341_ORANGE,ILI9341_BLACK);
-
-    tft.print("Heat Index: ");
-    tft.print(hi, 2);  // Value rounded to 2 decimal places
-    tft.println(" C"); // Unit
+    drawTextWithDivider(startX, startY + 5 * yGap, "Heat Index: ", hi, "C");
+    tft.drawLine(startX, startY + 5 * yGap + rectHeight, startX + rectWidth, startY + 5 * yGap + rectHeight, ILI9341_BLACK);
 }
 
 bool checkDHT(float t, float h)
