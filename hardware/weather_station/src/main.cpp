@@ -1,25 +1,41 @@
 #include <Arduino.h>
 #include <DHT.h>
 #include <Adafruit_BMP280.h>
-#include <Adafruit_ILI9341.h>
-#include <Adafruit_GFX.h>
-#include <SPI.h>
-#include <math.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 
+#ifndef _WIFI_H
+#include <WiFi.h>
+#include <HTTPClient.h>
+#endif
+
+#ifndef STDLIB_H
+#include <stdlib.h>
+#endif
+
+#ifndef STDIO_H
+#include <stdio.h>
+#endif
+
+#include <rom/rtc.h>
+
+#include <SPI.h>
+#include "Adafruit_GFX.h"
+#include "Adafruit_ILI9341.h"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-
-#define dhtPin 4
+// DEFINE VARIABLES
+#define dhtPin 32
 #define dhtType DHT22
-#define soilpin 34
+#define soilpin 35
 
-#define MAX 4095
-#define MIN 0
+#define analogPin 14
+#define BTN1 25
+#define BTN2 26
+#define BTN3 27
 
 #define TFT_DC 17
 #define TFT_CS 5
@@ -28,201 +44,211 @@ PubSubClient client(espClient);
 #define TFT_MOSI 23
 #define TFT_MISO 19
 
+#include <Fonts/FreeSansBold18pt7b.h>
+#include <Fonts/FreeSansBold9pt7b.h>
 
-const char *ntp_server ="pool.ntp.org";
-const long  gmtOffset_sec = -5;
-const int   daylightOffset_sec = 3600;
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK, TFT_RST, TFT_MISO);
 
+// Function declaration
+bool checkDHT(float t, float h);
+String toDocument(float t, float h, float p, float a, float hi, int soil);
+void displayReadings(float t, float h, float p, float a, float hi, int soil);
+float calculateHeatIndex(float t, float h);
+String JsonDoc(float t, float h, float p, float a, int soil, float hi);
+
+// MQTT CLIENT CONFIG
+static const char* pubtopic      = "620155671";                    // Add your ID number here
+static const char* subtopic[]    = {"620155671_sub","/elet2415"};  // Array of Topics(Strings) to subscribe to
 const char *ssid = "MonaConnect";
 const char *password = "";
 
-//MQTT client
-const char *broker = "broker.emqx.io";
-const int port = 1883;
+static const char *mqtt_server = "broker.emqx.io";       // Broker IP address or Domain name as a String
+static uint16_t mqtt_port = 1883;
+
 
 Adafruit_BMP280 bmp; // I2C
 DHT dht(dhtPin, dhtType);
 
-
-Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_CLK, TFT_RST, TFT_MISO);
-
-bool checkDHT(float t, float h);
-String toJson(float  , float , float , float , float);
-float to2dp(float);
-void init_connections();
-void print_to_tft();
-void draw_dashboard(float temperature, float soil, float humidity, float heatIndex, float pressure, float altitude);
-// String toDocument(float t, float h, float p, float a, int soil);
-// TODO: add error checking for the DHT sensor
-
-void setup()
-{
-  Serial.begin(9600);
-
-
-  dht.begin();
-  while (!bmp.begin(0x76))
-  {
-    Serial.println("Could not find a valid BMP280 sensor, check wiring!");
+void setup() {
+    Serial.begin(115200);
     delay(1000);
-  }
 
-  tft.begin();
-  tft.setRotation(3);
-  tft.fillScreen(ILI9341_BLACK);
-  tft.setCursor(0, 0);
-  // tft.setTextColor(ILI9341_WHITE);
-  tft.setTextColor(ILI9341_WHITE,ILI9341_BLACK);
-  tft.setTextSize(4);
-  tft.setCursor(30,30);
-  tft.println("WELCOME");
-  delay(100);
-  delay(1000);
-  tft.fillScreen(ILI9341_BLACK);
-  init_connections();
-  tft.fillScreen(ILI9341_BLACK);
-  // tft.drawRect(0, 0, tft.width(), tft.height(), ILI9341_WHITE);
+    WiFi.mode(WIFI_STA); //Optional
+    WiFi.begin(ssid, password);
+    Serial.println("\nConnecting");
+
+    while(WiFi.status() != WL_CONNECTED){
+        Serial.print(".");
+        delay(100);
+    }
+
+    Serial.println("\nConnected to the WiFi network");
+    Serial.print("Local ESP32 IP: ");
+    Serial.println(WiFi.localIP());
+
+    if (WiFi.isConnected()) {
+        Serial.println("Connected to wifi network");
+    }
+
+    dht.begin();
+    while (!bmp.begin(0x76)) {
+        Serial.println("Could not find a valid BMP280 sensor, check wiring!");
+        delay(1000);
+    }
+    // Set up the display
+    tft.begin();
+    tft.fillScreen(ILI9341_BLACK);
+    tft.setCursor(0, 0);
+    tft.setTextColor(ILI9341_GREEN);
+    tft.setTextSize(2);
+
+
+  client.setServer(mqtt_server, mqtt_port);
+    while(!client.connect("demo")){
+    Serial.println("Connecting to Server...");
+        delay(5000);
+  }
+}
+ 
+void loop() {
+    // Read values from the hardware
+    float t = dht.readTemperature();
+    float h = dht.readHumidity();
+    float p = bmp.readPressure();
+    float a = bmp.readAltitude(1014.8);
+    int soil = analogRead(soilpin);
+
+    // Calculate Heat Index
+    float hi = calculateHeatIndex(t, h);
+
+    const char *doc = JsonDoc(t,h,p,a,soil,hi).c_str();
+    Serial.println(doc);
+    bool published = client.publish("demo", doc);
+     if(published)
+    Serial.println("Published");
+
+    // Check if any reads failed and exit early (to try again).
+    if (!checkDHT(t, h)) {
+        Serial.println("Failed to read from DHT sensor!");
+        return;
+    }
+
+    // Print the sensor readings
+    Serial.printf("\nTemperature: %f\n", t);
+    Serial.printf("Humidity: %f\n", h);
+    Serial.printf("Pressure: %f\n", p);
+    Serial.printf("Altitude: %f\n", a);
+    Serial.printf("Soil: %d\n", soil);
+    Serial.printf("Heat Index: %f\n", hi);
+
+    displayReadings(t, h, p, a, hi, soil);
+
+    delay(2000);
 }
 
-
-void loop()
+void displayReadings(float t, float h, float p, float a, float hi, int soil)
 {
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-  float p = bmp.readPressure();
-  float a = bmp.readAltitude(1014.8);
-  float t2 = bmp.readTemperature();
-  int soil = analogRead(soilpin);
-  Serial.println(soil);
-  float soil_p = map(soil , 4095, 0 , 0 , 100);
+    // Print labels
+    tft.setTextColor(ILI9341_GREEN,ILI9341_BLACK);
+    tft.setTextSize(2);
 
-  print_to_tft();
+    // Define label positions
+    int startX = 10;
+    int startY = 10;
+    int yGap = 50;
+    int rectHeight = 20; // Adjust as needed
 
-  draw_dashboard(t2, soil_p, h, dht.computeHeatIndex((t,h,false)), p, a);
-  
+    // Clear area and Print Temperature
+    //tft.fillRect(startX, startY, 300, rectHeight, ILI9341_WHITE);
+    tft.setTextColor(ILI9341_RED,ILI9341_BLACK);
 
-  const char  *doc = toJson(t2,h,p,soil_p,a).c_str();
+    tft.setCursor(startX, startY);
+    tft.print("Temperature: ");
+    tft.print(t, 2);  // Value rounded to 2 decimal places
+    tft.println(" C"); // Unit
 
-  bool published = client.publish("topic1",doc);
-  if(published)
-  Serial.println("Published");
+    // Clear area and Print Humidity
+    //tft.fillRect(startX, startY + yGap, 300, rectHeight, ILI9341_BLACK);
+    tft.setCursor(startX, startY + yGap);
+    tft.setTextColor(ILI9341_GREEN,ILI9341_BLACK);
 
-  float temp = (t + t2) / 2;
-  if (!checkDHT(t, h))
-  {
-    Serial.println("Error reading from DHT sensor");
-  }
-  else
-  {
-    Serial.printf("Temperature %.2f C \t Humidity %.2f\n", temp, h);
-    Serial.printf("Pressure %.2f hPa \t Approximate Altitude %.2f m\n", p, a);
-    Serial.printf("Soil Moisture: %.2f% \t Heat Index %.2f C\n\n\n", soil_p, dht.computeHeatIndex(t, h,false));
-  }
+    tft.print("Humidity: ");
+    tft.print(h, 2);  // Value rounded to 2 decimal places
+    tft.println(" %"); // Unit
 
-    vTaskDelay(2000 / portTICK_PERIOD_MS); // Use vTaskDelay instead of delay
-  
-  // put your main code here, to run repeatedly:
+    // Clear area and Print Pressure
+   // tft.fillRect(startX, startY + 2 * yGap, 300, rectHeight, ILI9341_BLACK);
+    tft.setCursor(startX, startY + 2 * yGap);
+    tft.setTextColor(ILI9341_PINK,ILI9341_BLACK);
+
+    tft.print("Pressure: ");
+    tft.print(p, 2);  // Value rounded to 2 decimal places
+    tft.println(" Pa"); // Unit
+
+    // Clear area and Print Altitude
+    //tft.fillRect(startX, startY + 3 * yGap, 300, rectHeight, ILI9341_BLACK);
+    tft.setCursor(startX, startY + 3 * yGap);
+    tft.setTextColor(ILI9341_CYAN,ILI9341_BLACK);
+
+    tft.print("Altitude: ");
+    tft.print(a, 2);  // Value rounded to 2 decimal places
+    tft.println(" m"); // Unit
+
+    // Convert soil reading
+    float soilPercentage = 100 -((soil / 4095.0) * 100.0);
+
+    // Clear area and Print Soil
+    //tft.fillRect(startX, startY + 4 * yGap, 300, rectHeight, ILI9341_BLACK);
+    tft.setCursor(startX, startY + 4 * yGap);
+    tft.setTextColor(ILI9341_YELLOW,ILI9341_BLACK);
+
+    tft.print("Soil: ");
+    tft.print(soilPercentage, 2);  // Value rounded to 2 decimal places
+    tft.println(" %"); // Unit
+
+    // Clear area and Print Heat Index
+    //tft.fillRect(startX, startY + 5 * yGap, 300, rectHeight, ILI9341_BLACK);
+    tft.setCursor(startX, startY + 5 * yGap);
+    tft.setTextColor(ILI9341_ORANGE,ILI9341_BLACK);
+
+    tft.print("Heat Index: ");
+    tft.print(hi, 2);  // Value rounded to 2 decimal places
+    tft.println(" C"); // Unit
 }
 
 bool checkDHT(float t, float h)
 {
-  if (isnan(t) || isnan(h))
-  {
-    return false;
-  }
-  return true;
-}
-
-void print_to_tft() {
-  // Draw border
-  tft.drawRect(0, 0, tft.width(), tft.height(), ILI9341_RED);
-  tft.drawRect(1, 1, tft.width() - 2, tft.height() - 2, ILI9341_YELLOW);
-  tft.drawRect(2, 2, tft.width() - 4, tft.height() - 4, ILI9341_GREEN);
-  tft.drawRect(3, 3, tft.width() - 6, tft.height() - 6, ILI9341_BLUE);
-}
-
-void draw_dashboard(float temperature, float soil, float humidity, float heatIndex, float pressure, float altitude) {
-
-  tft.setTextSize(2);
-
-  // Set the text color and size
-  tft.setTextColor(ILI9341_WHITE,ILI9341_BLACK);
-
-  tft.setCursor(10, 10);
-  tft.print("Temp: ");
-  tft.print(temperature);
-  tft.println(" C");
-  tft.println("");
-
-  tft.setTextColor(ILI9341_BLUE,ILI9341_BLACK);
-  tft.setCursor(10, 40);
-  tft.print("Soil: ");
-  tft.print(soil);
-  tft.println(" %");
-  tft.println("");
-
-  tft.setTextColor(ILI9341_WHITE,ILI9341_BLACK);
-  tft.setCursor(10, 70);
-  tft.print("Humidity: ");
-  tft.println(humidity);
-  tft.println("");
-  // tft.drawRect(8, 68, 100, 30, ILI9341_BLUE);
-
-  tft.setTextColor(ILI9341_BLUE,ILI9341_BLACK);
-  tft.setCursor(10, 100);
-  tft.print("Heat Index: ");
-  tft.println(heatIndex);
-
-
-  tft.setTextColor(ILI9341_WHITE,ILI9341_BLACK);
-  tft.setCursor(10, 130); 
-  tft.print("Pressure: ");
-  tft.println(pressure);
-
-  tft.setTextColor(ILI9341_BLUE,ILI9341_BLACK);
-  tft.setCursor(10, 160);
-  tft.print("Altitude: ");
-  tft.println(altitude);
-
-}
-
-void init_connections(){
-  Serial.println("Startinf");
-  WiFi.begin(ssid,password);
-  int retryCount = 0;
-  int print = 0;
-  while(!WiFi.isConnected() && retryCount < 10){
-    if(print==0){
-      tft.setTextSize(2);
-      print=1;
-      tft.printf("Connecting to wifi network %s", ssid);
+    if (isnan(t) || isnan(h))
+    {
+        return false;
     }
-    Serial.printf("Connecting to wifi network %s\n",ssid);
-    vTaskDelay(1000 / portTICK_PERIOD_MS); // Use vTaskDelay instead of delay
-    retryCount++;
-  }
-  if(WiFi.isConnected()){
-    Serial.println("Connected to wifi nework");
-  }
-  client.setServer(broker,port);
-  
-  retryCount = 0;
-  while(!client.connect("test1") && retryCount < 10){
-    Serial.println("connecting");
-    vTaskDelay(1000 / portTICK_PERIOD_MS); 
-    retryCount++;
-  }
+    return true;
 }
 
-  String toJson(float avg_temperature , float humidity, float pressure, float soil_moisture , float aprox_altitude){
+float calculateHeatIndex(float t, float h)
+{
+    // Constants for the Steadman Heat Index formula
+    const float c1 = -8.4157;
+    const float c2 = 1.9243;
+    const float c3 = 0.5204;
+    const float c4 = -0.0261;
+    
+    // Calculate the Heat Index
+    float hi = c1 + c2*t + c3*h + c4*t*h;
+
+    return hi;
+}
+
+  String JsonDoc(float t, float h, float p, float a, int soil, float hi){
     JsonDocument doc;
-    doc["temperature"] = ceil(avg_temperature * 100.0) / 100.0;
-    doc["humidity"] = ceil(humidity * 100.0) /100.0;
-    doc["pressure"] = ceil(pressure * 100.0) /100.0 ;
-    doc["soil moisture"] = soil_moisture;
-    doc["heat index"] = ceil(dht.computeHeatIndex(avg_temperature, humidity,false) * 100.0) / 100.0;
-    doc["altitude"] = ceil(aprox_altitude * 100.0) / 100.0;
+    doc["temperature"] = ceil(t * 100.0)/100.0;
+    doc["humidity"] = ceil(h * 100.0)/100.0;
+    doc["pressure"] = ceil(p * 100.0)/100.0;
+    doc["altitude"] = ceil(a * 100.0)/100.0;
+    doc["soil"] = ceil(soil * 100.0)/100.0;
+    doc["heatindex"] = ceil(hi * 100.0)/100.0;
     String output;
     serializeJson(doc, output);
     return output;
+
   }
