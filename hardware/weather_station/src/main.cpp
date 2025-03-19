@@ -4,7 +4,9 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
-
+#include <lvgl.h>
+#include <TFT_eSPI.h>
+// #include wi-barometer.h
 
 #ifndef _WIFI_H
 #include <WiFi.h>
