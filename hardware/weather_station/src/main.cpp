@@ -4,8 +4,6 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
-#include <lvgl.h>
-#include <TFT_eSPI.h>
 // #include wi-barometer.h
 
 #ifndef _WIFI_H
@@ -174,7 +172,7 @@ void loop() {
         displayReadings(t, h, p, a, hi, soil);
     // }
 
-    delay(2000);
+    delay(1000);
 }
 
 void displayReadings(float t, float h, float p, float a, float hi, int soil)
