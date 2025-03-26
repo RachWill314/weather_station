@@ -2,6 +2,7 @@ import {defineStore} from 'pinia'
 import {ref} from 'vue'
 	
 import Paho from 'paho-mqtt';
+import { ca } from 'vuetify/locale';
 
 
 export const useMqttStore =  defineStore('mqtt', ()=>{
@@ -22,6 +23,13 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
     const port              = ref(8083);  // Port number
     const payload           = ref({"id":620155671,"timestamp": 1702566538,"temperature":0,"humidity":0,"pressure":0, "altitude":0, "soil":0, "heatindex":0}); // Set initial values for payload
     const payloadTopic      = ref("");
+    const state             = ref(0);
+    const cardtitle         = ref("Temperature");
+    const cardsubtitle      = ref(0);
+    const cardunit          = ref("°C");
+    const cardunitconvert          = ref("°C");
+
+    const unit              = ref(0);
     const subTopics         = ref({});
  
 
@@ -68,6 +76,59 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
            try {
             payload.value       = JSON.parse(response.payloadString); 
             payloadTopic.value  = response.destinationName;
+            switch(state.value){
+                case 0:
+                    cardtitle.value = "Temperature";
+                    cardsubtitle.value = payload.value.temperature;
+                    cardunit.value = "°C";
+                    break;
+                case 1:
+                    cardtitle.value = "Humidity";
+                    cardsubtitle.value = payload.value.humidity;
+                    cardunit.value = "%";
+                    break;
+                case 2:
+                    cardtitle.value = "Pressure";
+                    cardsubtitle.value = payload.value.pressure;
+                    cardunit.value = "hPa";
+                    break;
+                case 3:
+                    cardtitle.value = "Altitude";
+                    cardsubtitle.value = payload.value.altitude;
+                    cardunit.value = "m";
+                    break;
+                case 4:
+                    cardtitle.value = "Soil Moisture";
+                    cardsubtitle.value = payload.value.soil;
+                    cardunit.value = "%";
+                    break;
+                case 5:
+                    cardtitle.value = "Heat Index";
+                    cardsubtitle.value = payload.value.heatindex;
+                    cardunit.value = "°C";
+                    break;
+                default:
+                    cardtitle.value = "Temperature";
+                    cardsubtitle.value = payload.value.temperature;
+                    cardunit.value = "°C";
+                    break;
+            }
+            switch(unit.value){
+                case 0:
+                    cardunitconvert.value = "°C";
+                    break;
+                case 1:
+                    payload.value.temperature = (payload.value.temperature * 9/5) + 32;
+                    payload.value.heatindex = (payload.value.heatindex * 9/5) + 32;
+                    cardunitconvert.value = "°F";
+                    // cardsubtitle.value = payload.value.temperature;
+                    // unit.value = "°F";
+                    break;
+                default:
+                    cardunitconvert.value = "°C";
+                    // unit.value = "°C";
+                    break;
+            }
             console.log(`Topic : ${payloadTopic.value} \nPayload : ${response.payloadString}`);  
            } catch (error) {
             console.log(`onMessageArrived Error: ${error}`);
@@ -172,10 +233,29 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
         mqtt.value.connect(options);    
     };
 
+    const stateChange = (value) => {
+        state.value = value;
+    }
+
+    // const convert = () => {
+    //     if(unit.value == 0){
+    //         unit.value = 1;
+    //     }else{
+    //         unit.value = 0;
+    //     }
+    // }
+
  
     return {  
         payload,
         payloadTopic,
+        cardtitle,
+        cardsubtitle,
+        cardunit,
+        cardunitconvert,
+        unit,
+        stateChange,
+        //convert,
         subscribe,
         unsubcribe,
         unsubcribeAll,

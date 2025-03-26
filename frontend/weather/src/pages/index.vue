@@ -1,14 +1,26 @@
 <template>
   <div class="image-background">
-    <div class="top-right-buttons">
-      <button class="rounded-button">Home</button>
-      <button class="rounded-button">Analysis</button>
-    </div>
+    <v-app-bar :elevation="0" class="transparent-app-bar" :color="transparent">
+    <h3 style="text-align: left;">ELET2415 Weather Station</h3>
+    <v-spacer></v-spacer>
+    <v-btn class="rounded-button" :to="'/'">
+      Home
+    </v-btn>
+    <v-btn class="rounded-button" :to="'/analysis'">
+      Analysis
+    </v-btn>
+  </v-app-bar>
     <div class="content">
-      <h3 style="text-align: left;">ELET2415 Weather Station</h3>
+      <div class="toggle-switch">
+        <label class="switch">
+          <input type="checkbox" v-model="isCelsius" @change="toggleTemperatureUnit" />
+          <span class="slider"></span>
+        </label>
+        <p class="toggle-label">{{ isCelsius ? '°C' : '°F' }}</p>
+      </div>
       <div class="glossy-container">
-        <h2>Temperature</h2>
-        <p class="large-number">{{payload.temperature}}°C</p>
+        <h2>{{ cardtitle }}</h2>
+        <p class="large-number">{{cardsubtitle}}{{ cardunitconvert }}</p>
         <h3 class="subheading">Previous</h3>
         <div class="previous-box">
           <div class="temperature">23°C</div>
@@ -19,42 +31,42 @@
         </div>
       </div>
       <div class="weather-icons">
-        <div class="circle-container">
+        <div class="circle-container" @click="Mqtt.stateChange(0)">
           <div class="circle">
             <img src="../assets/weathersym/temp.svg" alt="Temperature" />
           </div>
           <p class="weather-name">Temperature</p>
-          <p class="weather-value">{{payload.temperature}}°C</p>
+          <p class="weather-value">{{payload.temperature}}{{ cardunitconvert }}</p>
         </div>
-        <div class="circle-container">
+        <div class="circle-container" @click="Mqtt.stateChange(5)">
           <div class="circle">
             <img src="../assets/weathersym/heat.svg" alt="Heat Index" />
           </div>
           <p class="weather-name">Heat Index</p>
-          <p class="weather-value">{{payload.heatindex}}°C</p>
+          <p class="weather-value">{{payload.heatindex}}{{ cardunitconvert }}</p>
         </div>
-        <div class="circle-container">
+        <div class="circle-container" @click="Mqtt.stateChange(2)">
           <div class="circle">
             <img src="../assets/weathersym/airpressure.svg" alt="Air Pressure" />
           </div>
           <p class="weather-name">Air Pressure</p>
           <p class="weather-value">{{payload.pressure}} hPa</p>
         </div>
-        <div class="circle-container">
+        <div class="circle-container" @click="Mqtt.stateChange(3)">
           <div class="circle">
             <img src="../assets/weathersym/altitude.svg" alt="Altitude" />
           </div>
           <p class="weather-name">Altitude</p>
           <p class="weather-value">{{payload.altitude}} m</p>
         </div>
-        <div class="circle-container">
+        <div class="circle-container" @click="Mqtt.stateChange(1)">
           <div class="circle">
             <img src="../assets/weathersym/humidity.svg" alt="Humidity" />
           </div>
           <p class="weather-name">Humidity</p>
           <p class="weather-value">{{payload.humidity}}%</p>
         </div>
-        <div class="circle-container">
+        <div class="circle-container" @click="Mqtt.stateChange(4)">
           <div class="circle">
             <img src="../assets/weathersym/soil.svg" alt="Soil Moisture" />
           </div>
@@ -62,6 +74,8 @@
           <p class="weather-value">{{payload.soil}}%</p>
         </div>
       </div>
+      <br>
+      <!-- <button class="rounded-button">Live Graph</button> -->
     </div>
   </div>
 </template>
@@ -76,19 +90,36 @@ import { storeToRefs } from "pinia";
 
 // import { useAppStore } from "@/store/appStore";
 import { ref, reactive, watch, onMounted, onBeforeUnmount, computed, } from "vue";
-import { useRoute, useRouter } from "vue-router";
 
 // VARIABLES
 const router = useRouter();
 const route = useRoute();
 const Mqtt = useMqttStore();
 
-const { payload, payloadTopic } = storeToRefs(Mqtt);
+const { payload, payloadTopic, cardtitle, cardsubtitle, cardunit, cardunitconvert } =  storeToRefs(Mqtt);
 const host= ref("broker.emqx.io");
 const port= ref(9002);
 const point= ref(10);
 const shift= ref(false);
 let isActive = ref(false);
+
+// Method to navigate to the Home page
+
+// Reactive state for toggle switch
+const isCelsius = ref(true);
+
+//Method to toggle temperature unit
+const toggleTemperatureUnit = () => {
+  if (isCelsius.value) {
+    cardunitconvert.value = '°C';
+    payload.value.temperature = (payload.value.temperature -3) * 5/9;
+    payload.value.heatindex = (payload.value.heatindex -32) * 5/9;
+  } else {
+    payload.value.temperature = (payload.value.temperature * 9/5) + 32;
+    payload.value.heatindex = (payload.value.heatindex * 9/5) + 32;
+    cardunitconvert.value = '°F';
+  }
+};
 
 onMounted(() => {
     // THIS FUNCTION IS CALLED AFTER THIS COMPONENT HAS BEEN MOUNTED
@@ -122,12 +153,24 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.top-right-buttons {
+/* .top-right-buttons {
   position: absolute;
   top: 20px;
   right: 20px;
   display: flex;
-  gap: 10px; /* Space between buttons */
+  gap: 10px;
+} */
+
+.transparent-app-bar {
+  background: transparent !important; /* Fully transparent background */
+  box-shadow: none !important; /* Remove any shadow */
+  display: flex;
+  justify-content: flex-start; /* Align items to the left */
+  padding: 0 20px; /* Add some padding for spacing */
+}
+
+.transparent-app-bar .rounded-button {
+  margin-right: 10px; /* Add spacing between buttons */
 }
 
 .rounded-button {
@@ -141,6 +184,7 @@ onMounted(() => {
   cursor: pointer;
   box-shadow: none; /* Remove shadow */
   transition: background 0.3s ease, color 0.3s ease;
+  align-self: left;
 }
 
 .rounded-button:hover {
@@ -233,6 +277,18 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, background 0.3s ease; /* Smooth transition for hover and click effects */
+
+}
+
+.circle:hover {
+  background: rgba(255, 255, 255, 0.8); /* Brighter background on hover */
+  transform: scale(1.1); /* Slightly enlarge the circle on hover */
+}
+
+.circle:active {
+  background: rgba(255, 255, 255, 1); /* Fully opaque background on click */
+  transform: scale(0.95); /* Slightly shrink the circle on click */
 }
 
 .circle-container {
@@ -258,5 +314,64 @@ onMounted(() => {
 .weather-value {
   font-size: 0.8rem;
   color: white;
+}
+
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 25px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.5);
+  border-radius: 25px;
+  transition: 0.4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 19px;
+  width: 19px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.4s;
+}
+
+input:checked + .slider {
+  background-color: rgba(255, 255, 255, 0.8);
+}
+
+input:checked + .slider:before {
+  transform: translateX(25px);
+}
+
+.toggle-label {
+  margin-left: 10px;
+  font-size: 1rem;
+  color: white;
+  font-weight: bold;
 }
 </style>
