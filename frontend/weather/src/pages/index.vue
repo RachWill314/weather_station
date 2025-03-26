@@ -13,14 +13,14 @@
     <div class="content">
       <div class="toggle-switch">
         <label class="switch">
-          <input type="checkbox" v-model="isCelsius" @change="toggleTemperatureUnit" />
+          <input type="checkbox" v-model="isCelsius.value" @change="toggleTemperatureUnit" class="toggle-input" />
           <span class="slider"></span>
         </label>
         <p class="toggle-label">{{ isCelsius ? '°C' : '°F' }}</p>
       </div>
       <div class="glossy-container">
         <h2>{{ cardtitle }}</h2>
-        <p class="large-number">{{cardsubtitle}}{{ cardunitconvert }}</p>
+        <p class="large-number">{{cardsubtitle}}{{ cardunit }}</p>
         <h3 class="subheading">Previous</h3>
         <div class="previous-box">
           <div class="temperature">23°C</div>
@@ -90,6 +90,7 @@ import { storeToRefs } from "pinia";
 
 // import { useAppStore } from "@/store/appStore";
 import { ref, reactive, watch, onMounted, onBeforeUnmount, computed, } from "vue";
+import { ca } from "vuetify/locale";
 
 // VARIABLES
 const router = useRouter();
@@ -108,18 +109,31 @@ let isActive = ref(false);
 // Reactive state for toggle switch
 const isCelsius = ref(true);
 
+watch(payload, (newVal, oldVal) => {
+  if(isCelsius.value==false && cardunit.value=="°C"){
+    payload.value.temperature = Number(((payload.value.temperature * 9/5) + 32).toFixed(2));
+    payload.value.heatindex = Number(((payload.value.heatindex * 9/5) + 32).toFixed(2));
+    cardunit.value = "°F";
+    cardunitconvert.value = "°F";
+    cardsubtitle.value = payload.value.temperature;
+  }else {
+    cardunitconvert.value = "°C";
 
+  }
+  });
 
 //Method to toggle temperature unit
 const toggleTemperatureUnit = () => {
-  if (isCelsius.value) {
-    cardunitconvert.value = '°C';
-    payload.value.temperature = (payload.value.temperature - 32) * 5/9;
-    payload.value.heatindex = (payload.value.heatindex - 32) * 5/9;
-  } else {
-    payload.value.temperature = (payload.value.temperature * 9/5) + 32;
-    payload.value.heatindex = (payload.value.heatindex * 9/5) + 32;
-    cardunitconvert.value = '°F';
+  isCelsius.value = !isCelsius.value;
+  if(isCelsius.value==false && cardunit.value=="°C"){
+    payload.value.temperature = Number(((payload.value.temperature * 9/5) + 32).toFixed(2));
+    payload.value.heatindex = Number(((payload.value.heatindex * 9/5) + 32).toFixed(2));
+    cardunit.value = "°F";
+    cardunitconvert.value = "°F";
+    cardsubtitle.value = payload.value.temperature;
+  }else {
+    cardunitconvert.value = "°C";
+
   }
 };
 
@@ -139,8 +153,6 @@ onMounted(() => {
     // THIS FUNCTION IS CALLED RIGHT BEFORE THIS COMPONENT IS UNMOUNTED
     Mqtt.unsubcribeAll();
   });
-  payload.value.temperature = (payload.value.temperature -32) * 5/9;
-    payload.value.heatindex = (payload.value.heatindex -32) * 5/9;
 
 </script>
 
@@ -163,6 +175,14 @@ onMounted(() => {
   display: flex;
   gap: 10px;
 } */
+.toggle-input:hover + .slider {
+  background-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
+.toggle-input:hover + .slider:before {
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
+}
 
 .transparent-app-bar {
   background: transparent !important; /* Fully transparent background */

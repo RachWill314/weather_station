@@ -31,7 +31,6 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
     const tempData = reactive([])
     const heatData = reactive([])
     const humidityData = reactive([])
-
     const unit              = ref(0);
     const subTopics         = ref({});
  
@@ -116,22 +115,7 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
                     cardunit.value = "°C";
                     break;
             }
-            switch(unit.value){
-                case 0:
-                    cardunitconvert.value = "°C";
-                    break;
-                case 1:
-                    payload.value.temperature = (payload.value.temperature * 9/5) + 32;
-                    payload.value.heatindex = (payload.value.heatindex * 9/5) + 32;
-                    cardunitconvert.value = "°F";
-                    // cardsubtitle.value = payload.value.temperature;
-                    // unit.value = "°F";
-                    break;
-                default:
-                    cardunitconvert.value = "°C";
-                    // unit.value = "°C";
-                    break;
-            }
+          
             console.log(`Topic : ${payloadTopic.value} \nPayload : ${response.payloadString}`);  
            } catch (error) {
             console.log(`onMessageArrived Error: ${error}`);
@@ -237,6 +221,7 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
     };
 
     const stateChange = (value) => {
+        
         state.value = value;
     }
 

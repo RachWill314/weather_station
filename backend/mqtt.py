@@ -19,7 +19,7 @@ def on_message(client, userdata, msg):
         payload_json = json.loads(payload)
         payload_json['timestamp'] = datetime.timestamp(datetime.now())
         functions.mycol.insert_one(payload_json)
-        print(payload)
+        # print(payload)
     except json.JSONDecodeError:
         print(f"Failed to decode JSON: {payload}")
 

@@ -45,41 +45,46 @@
             </v-tabs>
           </v-card>
           <div class="button-wrapper">
-  <!-- Start Date Card -->
-  <v-card class="date-card" outlined @click="startDateDialog = true">
-    <v-card-text>
-      <p class="date-card-title">Select Start Date</p>
-    </v-card-text>
-    <v-dialog v-model="startDateDialog" persistent max-width="290">
-      <v-card>
-        <v-date-picker
-          v-model="startDate"
-          @update:modelValue="startDateDialog = false"
-        />
-      </v-card>
-    </v-dialog>
-  </v-card>
+            <v-card class="date-card" outlined @click="startDateDialog = true">
+  <v-card-text>
+    <p class="date-card-title">Select Start Date</p>
+    <p class="date-timestamp" v-if="startDate">
+      {{ formatDate(startDate) }}
+    </p>
+  </v-card-text>
+  <v-dialog v-model="startDateDialog" persistent max-width="290">
+    <v-card>
+      <v-date-picker
+        v-model="startDate"
+        @update:modelValue="startDateDialog = false"
+      />
+    </v-card>
+  </v-dialog>
+</v-card>
 
-  <!-- End Date Card -->
-  <v-card class="date-card" outlined @click="endDateDialog = true">
-    <v-card-text>
-      <p class="date-card-title">Select End Date</p>
-    </v-card-text>
-    <v-dialog v-model="endDateDialog" persistent max-width="290">
-      <v-card>
-        <v-date-picker
-          v-model="endDate"
-          @update:modelValue="endDateDialog = false"
-        />
-      </v-card>
-    </v-dialog>
-  </v-card>
+<v-card class="date-card" outlined @click="endDateDialog = true">
+  <v-card-text>
+    <p class="date-card-title">Select End Date</p>
+    <p class="date-timestamp" v-if="endDate">
+      {{ formatDate(endDate) }}
+    </p>
+  </v-card-text>
+  <v-dialog v-model="endDateDialog" persistent max-width="290">
+    <v-card>
+      <v-date-picker
+        v-model="endDate"
+        @update:modelValue="endDateDialog = false"
+      />
+    </v-card>
+  </v-dialog>
+</v-card>
 
   <!-- Analyze Button -->
   <v-btn class="rounded-btn" @click="analyzeData">
     Analyze
   </v-btn>
 </div>
+<div> <canvas style= "width: 800px;" id="thh"> </canvas></div>
 
         </div>
       </div>
@@ -90,14 +95,20 @@
 <script setup >
 import LineGraph from "@/components/LineGraph.vue";
 import { storeToRefs } from "pinia";
-import { useMqttStore } from "../stores/mqttStore"; // Import Mqtt Store
+import { useMqttStore } from "../stores/mqttStore";
+import { useAppStore } from "../stores/app"; // Import Mqtt Store
+
+// Import Mqtt Store
 import { ref, reactive, watch, onMounted, onBeforeUnmount, computed, } from "vue";
 import { Chart, registerables } from "chart.js";
 
 Chart.register(...registerables);
 const Mqtt = useMqttStore();
+const App = useAppStore(); 
 
 const { payload, payloadTopic, cardtitle, cardsubtitle, cardunit, cardunitconvert , tempData} =  storeToRefs(Mqtt);
+const {temp , hum , heat, timestamp} = storeToRefs(App);
+
 const temperatureData = ref([]); // Example temperature data
     const heatIndexData = ref([]); // Example heat index data
     const humidityData = ref([]);
@@ -109,6 +120,8 @@ const temperatureData = ref([]); // Example temperature data
 onMounted(() => {
   makegraph();
   makesoilgraph();
+  makeanalysisgraph();
+
     // THIS FUNCTION IS CALLED AFTER THIS COMPONENT HAS BEEN MOUNTED
     Mqtt.connect(); // Connect to Broker located on the backend
     setTimeout(() => {
@@ -120,7 +133,17 @@ onMounted(() => {
 
     //CreateCharts();
   });
-  
+  watch([temp, hum, heat, timestamp], ([newTemp, newHum, newHeat, newTimestamp]) => {
+  if (thhgraph) {
+    thhgraph.data.labels = newTimestamp;
+    thhgraph.data.datasets[0].data = newTemp;
+    thhgraph.data.datasets[1].data = newHeat;
+    thhgraph.data.datasets[2].data = newHum;
+    thhgraph.update();
+  }
+}, { deep: true });
+
+
   onBeforeUnmount(() => {
     // THIS FUNCTION IS CALLED RIGHT BEFORE THIS COMPONENT IS UNMOUNTED
     Mqtt.unsubcribeAll();
@@ -128,6 +151,7 @@ onMounted(() => {
 
   let tempHiGraph =null;
   let soilhumchart = null;
+  let thhgraph = null;
 const startDateDialog = ref(false); // Controls the visibility of the start date picker dialog
     const endDateDialog = ref(false); // Controls the visibility of the end date picker dialog
     const startDate = ref(null); // Stores the selected start date
@@ -152,8 +176,19 @@ const startDateDialog = ref(false); // Controls the visibility of the start date
       }
 
       // Convert dates to comparable format
-      const start = new Date(startDate.value);
-      const end = new Date(endDate.value);
+      const start = new Date(startDate.value).getTime();
+      const end = new Date(endDate.value).getTime();
+
+      if (end <= start) {
+    alert("End date must be after start date");
+    return;
+  }
+
+  App.getAllData(start,end);
+
+  console.log(temp.value);
+  console.log(`the valu is ${hum.value}`);
+
 
     
     };
@@ -274,6 +309,54 @@ const startDateDialog = ref(false); // Controls the visibility of the start date
 
 };
 
+const makeanalysisgraph = () => {
+    const thhcanvas = document.getElementById('thh');
+  if (thhcanvas) {
+    thhgraph = new Chart(thhcanvas, {
+      type: 'line',
+      data: {
+        labels: timestamp.value,
+        datasets: [
+          {
+            label: "Temperature (°C)",
+            data: temp.value,
+            borderColor: "rgba(75, 192, 192, 1)",
+            backgroundColor: "rgba(75, 192, 192, 0.2)",
+            borderWidth: 2,
+            tension: 0.4,
+          },
+          {
+            label: "Heat Index (°C)", 
+            data: heat.value,
+            borderColor: "rgba(255, 99, 132, 1)",
+            backgroundColor: "rgba(255, 99, 132, 0.2)", 
+            borderWidth: 2,
+            tension: 0.4,
+          },
+          {
+            label: "Humidity (%)", 
+            data: hum.value,
+            borderColor: "rgba(255, 99, 132, 1)",
+            backgroundColor: "rgba(255, 99, 132, 0.2)", 
+            borderWidth: 2,
+            tension: 0.4,
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 0
+        }
+      }
+    });
+  }
+
+
+};
+
+
 const makesoilgraph = () => {
   const soilCanvas = document.getElementById('soil');
   if (soilCanvas) {
@@ -310,6 +393,19 @@ const makesoilgraph = () => {
     });
   }
 }
+
+const formatDate = (date) => {
+  if (!date) return '';
+  const dateObj = new Date(date);
+  return dateObj.toLocaleString('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+};
 
 </script>
 
@@ -357,6 +453,12 @@ const makesoilgraph = () => {
   /* Add spacing between the cards and button */
   margin-top: 20px;
   /* Add spacing above the row */
+}
+
+.date-timestamp {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 4px;
 }
 
 .date-card {
