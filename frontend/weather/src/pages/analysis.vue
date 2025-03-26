@@ -23,11 +23,14 @@
             <v-card-text>
               <v-tabs-window v-model="tab">
                 <v-tabs-window-item value="Temperature">
-                  <LineGraph :labels="timeLabels" :datasets="temperatureAndHeatIndexData" />
+                  <div> <canvas style= "width: 800px;" id = "tempdata"> </canvas> </div>
+                  <!-- <LineGraph :labels="timeLabels" :datasets="temperatureAndHeatIndexData" /> -->
                 </v-tabs-window-item>
 
                 <v-tabs-window-item value="Humidity">
-                  <LineGraph :labels="timeLabels" :datasets="humidityAndSoilMoistureData" />
+                  <!-- <LineGraph :labels="timeLabels" :datasets="humidityAndSoilMoistureData" /> -->
+                  <div> <canvas style= "width: 800px;" id = "soil"> </canvas> </div>
+
                 </v-tabs-window-item>
 
               </v-tabs-window>
@@ -42,27 +45,41 @@
             </v-tabs>
           </v-card>
           <div class="button-wrapper">
-            <!-- Start Date Button -->
-            <v-btn class="rounded-btn" @click="startDateDialog = true">
-              Select Start Date
-            </v-btn>
-            <v-dialog v-model="startDateDialog" persistent max-width="290">
-              <v-card>
-                <v-date-picker v-model="startDate" @input="startDateDialog = false" />
-              </v-card>
-            </v-dialog>
+  <!-- Start Date Card -->
+  <v-card class="date-card" outlined @click="startDateDialog = true">
+    <v-card-text>
+      <p class="date-card-title">Select Start Date</p>
+    </v-card-text>
+    <v-dialog v-model="startDateDialog" persistent max-width="290">
+      <v-card>
+        <v-date-picker
+          v-model="startDate"
+          @update:modelValue="startDateDialog = false"
+        />
+      </v-card>
+    </v-dialog>
+  </v-card>
 
-            <!-- End Date Button -->
-            <v-btn class="rounded-btn" @click="endDateDialog = true">
-              Select End Date
-            </v-btn>
-            <v-dialog v-model="endDateDialog" persistent max-width="290">
-              <v-card>
-                <v-date-picker v-model="endDate" @input="endDateDialog = false" />
-              </v-card>
-            </v-dialog>
-          </div>
+  <!-- End Date Card -->
+  <v-card class="date-card" outlined @click="endDateDialog = true">
+    <v-card-text>
+      <p class="date-card-title">Select End Date</p>
+    </v-card-text>
+    <v-dialog v-model="endDateDialog" persistent max-width="290">
+      <v-card>
+        <v-date-picker
+          v-model="endDate"
+          @update:modelValue="endDateDialog = false"
+        />
+      </v-card>
+    </v-dialog>
+  </v-card>
 
+  <!-- Analyze Button -->
+  <v-btn class="rounded-btn" @click="analyzeData">
+    Analyze
+  </v-btn>
+</div>
 
         </div>
       </div>
@@ -70,58 +87,229 @@
   </div>
 </template>
 
-<script>
+<script setup >
 import LineGraph from "@/components/LineGraph.vue";
+import { storeToRefs } from "pinia";
+import { useMqttStore } from "../stores/mqttStore"; // Import Mqtt Store
+import { ref, reactive, watch, onMounted, onBeforeUnmount, computed, } from "vue";
+import { Chart, registerables } from "chart.js";
 
-export default {
-  components: {
-    LineGraph,
-  },
-  data() {
-    return {
-      tab: "Temperature",
-      timeLabels: ["10:00", "11:00", "12:00", "13:00", "14:00"], // Example time labels
-      temperatureAndHeatIndexData: [
-        {
-          label: "Temperature (°C)",
-          data: [22, 24, 23, 25, 26], // Example temperature data
-          borderColor: "rgba(75, 192, 192, 1)",
-          backgroundColor: "rgba(75, 192, 192, 0.2)",
-          borderWidth: 2,
-          tension: 0.4, // Smooth curve
-        },
-        {
-          label: "Heat Index (°C)",
-          data: [23, 25, 24, 26, 27], // Example heat index data
-          borderColor: "rgba(255, 99, 132, 1)",
-          backgroundColor: "rgba(255, 99, 132, 0.2)",
-          borderWidth: 2,
-          tension: 0.4, // Smooth curve
-        },
-      ],
+Chart.register(...registerables);
+const Mqtt = useMqttStore();
 
-      humidityAndSoilMoistureData: [
-        {
-          label: "Humidity (%)",
-          data: [60, 65, 63, 68, 70], // Example humidity data
-          borderColor: "rgba(54, 162, 235, 1)",
-          backgroundColor: "rgba(54, 162, 235, 0.2)",
-          borderWidth: 2,
-          tension: 0.4, // Smooth curve
-        },
-        {
-          label: "Soil Moisture (%)",
-          data: [40, 42, 41, 43, 45], // Example soil moisture data
-          borderColor: "rgba(153, 102, 255, 1)",
-          backgroundColor: "rgba(153, 102, 255, 0.2)",
-          borderWidth: 2,
-          tension: 0.4, // Smooth curve
-        },
-      ],
+const { payload, payloadTopic, cardtitle, cardsubtitle, cardunit, cardunitconvert , tempData} =  storeToRefs(Mqtt);
+const temperatureData = ref([]); // Example temperature data
+    const heatIndexData = ref([]); // Example heat index data
+    const humidityData = ref([]);
+    const soilMoistureData = ref([]); // Example soil moisture data
+     // Example humidity data
+    const filteredLabels = ref([]); // Labels for the filtered graph
+    const filteredGraphData = ref([]); 
 
+onMounted(() => {
+  makegraph();
+  makesoilgraph();
+    // THIS FUNCTION IS CALLED AFTER THIS COMPONENT HAS BEEN MOUNTED
+    Mqtt.connect(); // Connect to Broker located on the backend
+    setTimeout(() => {
+      Mqtt.subscribe("620155671");
+      Mqtt.subscribe("620155671_pub");
+      Mqtt.subscribe("620155671_sub");
+    }, 3000);
+
+
+    //CreateCharts();
+  });
+  
+  onBeforeUnmount(() => {
+    // THIS FUNCTION IS CALLED RIGHT BEFORE THIS COMPONENT IS UNMOUNTED
+    Mqtt.unsubcribeAll();
+  });
+
+  let tempHiGraph =null;
+  let soilhumchart = null;
+const startDateDialog = ref(false); // Controls the visibility of the start date picker dialog
+    const endDateDialog = ref(false); // Controls the visibility of the end date picker dialog
+    const startDate = ref(null); // Stores the selected start date
+    const endDate = ref(null); // Stores the selected end date
+    const tab = ref("Temperature");
+    const start = ref(null);
+    const timeLabels = ref([]); // Example time labels
+
+    // For analyze graph
+    const dateLabels = ref([
+      "2025-03-20",
+      "2025-03-21",
+      "2025-03-22",
+      "2025-03-23",
+      "2025-03-24",
+    ]); // Example date labels
+
+    const analyzeData = () => {
+      if (!startDate.value || !endDate.value) {
+        alert("Please select both start and end dates.");
+        return;
+      }
+
+      // Convert dates to comparable format
+      const start = new Date(startDate.value);
+      const end = new Date(endDate.value);
+
+    
     };
-  },
+
+  watch(tab, (newTab) => {
+  if (newTab === 'Temperature') {
+    // Wait for DOM update
+    nextTick(() => {
+      if (!tempHiGraph) {
+        makegraph();
+      }
+    });
+  } else if (newTab === 'Humidity') {
+    // Wait for DOM update
+    nextTick(() => {
+      if (!soilhumchart) {
+        makesoilgraph();
+      }
+    });
+  }
+});
+
+  watch(payload, (newPayload) => {
+    console.log(heatIndexData.value);
+    const now = new Date();
+    const currentTime = now.toLocaleTimeString('en-US', { 
+        hour12: false,
+        hour: '2-digit', 
+        minute: '2-digit'
+    });
+
+    // Update the time labels
+    timeLabels.value = [...timeLabels.value, currentTime];
+    if(timeLabels.value.length > 10) {
+        timeLabels.value.shift();
+    }
+    // Update the temperature data
+    temperatureData.value = [...temperatureData.value, newPayload.temperature];
+    if(temperatureData.value.length > 10){
+      temperatureData.value.shift();
+    }
+
+    heatIndexData.value = [...heatIndexData.value, newPayload.heatindex];
+    if(heatIndexData.value.length > 10){
+      heatIndexData.value.shift();
+    }
+
+    humidityData.value = [...humidityData.value, newPayload.humidity];
+    if(humidityData.value.length > 10){
+      humidityData.value.shift();
+    }
+
+    soilMoistureData.value = [...soilMoistureData.value, newPayload.soil];
+    if(soilMoistureData.value.length > 10){
+      soilMoistureData.value.shift();
+    }
+
+
+    if(tempHiGraph){
+      tempHiGraph.data.labels = timeLabels.value;
+      tempHiGraph.data.datasets[0].data = temperatureData.value;
+      tempHiGraph.data.datasets[1].data = heatIndexData.value;
+    tempHiGraph.update();
+    }
+
+    if(soilhumchart){
+      soilhumchart.data.labels = timeLabels.value;
+      soilhumchart.data.datasets[0].data = humidityData.value;
+      soilhumchart.data.datasets[1].data = soilMoistureData.value;
+    soilhumchart.update();
+    }
+
+
+    
+    // Update the heat index data
+    // // Update the humidity data
+    // humidityData.value.push(newPayload.humidity);
+    // // Update the time labels
+    // timeLabels.value.push(newPayload.time);
+  });
+
+  const makegraph = () => {
+    const tempCanvas = document.getElementById('tempdata');
+  if (tempCanvas) {
+    tempHiGraph = new Chart(tempCanvas, {
+      type: 'line',
+      data: {
+        labels: timeLabels.value,
+        datasets: [
+          {
+            label: "Temperature (°C)",
+            data: temperatureData.value,
+            borderColor: "rgba(75, 192, 192, 1)",
+            backgroundColor: "rgba(75, 192, 192, 0.2)",
+            borderWidth: 2,
+            tension: 0.4,
+          },
+          {
+            label: "Heat Index (°C)", 
+            data: heatIndexData.value,
+            borderColor: "rgba(255, 99, 132, 1)",
+            backgroundColor: "rgba(255, 99, 132, 0.2)", 
+            borderWidth: 2,
+            tension: 0.4,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 0
+        }
+      }
+    });
+  }
+
+
 };
+
+const makesoilgraph = () => {
+  const soilCanvas = document.getElementById('soil');
+  if (soilCanvas) {
+    soilhumchart = new Chart(soilCanvas, {
+      type: 'line',
+      data: {
+        labels: timeLabels.value,
+        datasets: [
+          {
+            label: "Humidity (%)",
+            data: humidityData.value,
+            borderColor: "rgba(75, 192, 192, 1)",
+            backgroundColor: "rgba(75, 192, 192, 0.2)",
+            borderWidth: 2,
+            tension: 0.4,
+          },
+          {
+            label: "Soil Moisture (%)", 
+            data: soilMoistureData.value,
+            borderColor: "rgba(255, 99, 132, 1)",
+            backgroundColor: "rgba(255, 99, 132, 0.2)", 
+            borderWidth: 2,
+            tension: 0.4,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 0
+        }
+      }
+    });
+  }
+}
 
 </script>
 
@@ -161,18 +349,55 @@ export default {
 
 .button-wrapper {
   display: flex;
-  justify-content: space-evenly; /* Space between the buttons */
-  gap: 20px; /* Space between the buttons */
-  margin-top: 20px; /* Add spacing above the buttons */
+  justify-content: space-between;
+  /* Space between the cards and button */
+  align-items: center;
+  /* Align items vertically */
+  gap: 20px;
+  /* Add spacing between the cards and button */
+  margin-top: 20px;
+  /* Add spacing above the row */
 }
 
-.rounded-btn {
-  background: rgba(255, 255, 255, 0.1); /* Slightly transparent background */
-  border: 2px solid black; /* White border */
-  border-radius: 50px; /* Rounded corners */
-  padding: 10px 10px; /* Consistent padding for size */
+.date-card {
+  flex: 1;
+  /* Make the cards take equal space */
+  padding: 2px;
+  text-align: center;
+  border:2px solid #555;
+  border-radius: 10px;
+  /* Rounded corners */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  /* Subtle shadow */
+  cursor: pointer;
+  /* Make the card clickable */
+  transition: box-shadow 0.3s ease;
+  background-color: white; /* White background */
+  color: black; /* Black text */
+}
+
+.date-card:hover {
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.2);
+  /* Elevate on hover */
+}
+
+.date-card-title {
   font-size: 1rem;
-  color: black; /* White text */
+  font-weight: bold;
+  margin: 0;
+}
+
+
+.rounded-btn {
+  display: flex; /* Enable flexbox */
+  justify-content: center; /* Center the text horizontally */
+  align-items: center; /* Center the text vertically */
+  background: rgba(255, 255, 255, 0.1); /* Slightly transparent background */
+  border: 2px solid black; /* Black border */
+  border-radius: 50px; /* Rounded corners */
+  padding: 10px 20px; /* Consistent padding for size */
+  font-size: 1rem;
+  color: black; /* Black text */
   font-weight: bold;
   cursor: pointer;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); /* Slight elevation */
@@ -180,9 +405,12 @@ export default {
 }
 
 .rounded-btn:hover {
-  background: rgba(255, 255, 255, 0.3); /* Slightly brighter background on hover */
-  color: black; /* Change text color on hover */
-  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3); /* Increase elevation on hover */
+  background: rgba(255, 255, 255, 0.3);
+  /* Slightly brighter background on hover */
+  color: black;
+  /* Change text color on hover */
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
+  /* Increase elevation on hover */
 }
 
 .rounded-button {

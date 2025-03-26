@@ -96,7 +96,7 @@ const router = useRouter();
 const route = useRoute();
 const Mqtt = useMqttStore();
 
-const { payload, payloadTopic, cardtitle, cardsubtitle, cardunit, cardunitconvert } =  storeToRefs(Mqtt);
+const { payload, payloadTopic, cardtitle, cardsubtitle, cardunit, cardunitconvert , tempData} =  storeToRefs(Mqtt);
 const host= ref("broker.emqx.io");
 const port= ref(9002);
 const point= ref(10);
@@ -108,12 +108,14 @@ let isActive = ref(false);
 // Reactive state for toggle switch
 const isCelsius = ref(true);
 
+
+
 //Method to toggle temperature unit
 const toggleTemperatureUnit = () => {
   if (isCelsius.value) {
     cardunitconvert.value = '°C';
-    payload.value.temperature = (payload.value.temperature -3) * 5/9;
-    payload.value.heatindex = (payload.value.heatindex -32) * 5/9;
+    payload.value.temperature = (payload.value.temperature - 32) * 5/9;
+    payload.value.heatindex = (payload.value.heatindex - 32) * 5/9;
   } else {
     payload.value.temperature = (payload.value.temperature * 9/5) + 32;
     payload.value.heatindex = (payload.value.heatindex * 9/5) + 32;
@@ -137,7 +139,8 @@ onMounted(() => {
     // THIS FUNCTION IS CALLED RIGHT BEFORE THIS COMPONENT IS UNMOUNTED
     Mqtt.unsubcribeAll();
   });
-  
+  payload.value.temperature = (payload.value.temperature -32) * 5/9;
+    payload.value.heatindex = (payload.value.heatindex -32) * 5/9;
 
 </script>
 

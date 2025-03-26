@@ -25,6 +25,14 @@
     setup(props) {
       const chartCanvas = ref(null);
       let chartInstance = null;
+
+      watch(() => props.datasets, (newDatasets) => {
+        console.log(newDatasets);
+        if (chartInstance) {
+          chartInstance.data.datasets = newDatasets;
+          chartInstance.update();
+        }
+      });
   
       onMounted(() => {
         if (chartCanvas.value) {

@@ -1,5 +1,5 @@
 import {defineStore} from 'pinia'
-import {ref} from 'vue'
+import {reactive, ref} from 'vue'
 	
 import Paho from 'paho-mqtt';
 import { ca } from 'vuetify/locale';
@@ -28,6 +28,9 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
     const cardsubtitle      = ref(0);
     const cardunit          = ref("°C");
     const cardunitconvert          = ref("°C");
+    const tempData = reactive([])
+    const heatData = reactive([])
+    const humidityData = reactive([])
 
     const unit              = ref(0);
     const subTopics         = ref({});
@@ -254,6 +257,7 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
         cardunit,
         cardunitconvert,
         unit,
+        tempData,
         stateChange,
         //convert,
         subscribe,
