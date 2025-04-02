@@ -27,10 +27,12 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
     const cardtitle         = ref("Temperature");
     const cardsubtitle      = ref(0);
     const cardunit          = ref("°C");
-    const cardunitconvert          = ref("°C");
-    const tempData = reactive([])
-    const heatData = reactive([])
-    const humidityData = reactive([])
+    const cardunitconvert   = ref("°C");
+    const altunit           = ref("m");
+    const pressureunit      = ref("hPa");
+    const tempData          = reactive([])
+    const heatData          = reactive([])
+    const humidityData      = reactive([])
     const unit              = ref(0);
     const subTopics         = ref({});
  
@@ -78,6 +80,7 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
            try {
             payload.value       = JSON.parse(response.payloadString); 
             payloadTopic.value  = response.destinationName;
+            payload.value.pressure = Math.round(payload.value.pressure / 100);
             switch(state.value){
                 case 0:
                     cardtitle.value = "Temperature";
@@ -90,7 +93,7 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
                     cardunit.value = "%";
                     break;
                 case 2:
-                    cardtitle.value = "Pressure";
+                    cardtitle.value = "Air Pressure";
                     cardsubtitle.value = payload.value.pressure;
                     cardunit.value = "hPa";
                     break;
@@ -107,7 +110,7 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
                 case 5:
                     cardtitle.value = "Heat Index";
                     cardsubtitle.value = payload.value.heatindex;
-                    cardunit.value = "°C";
+                    cardunit.value = " ";
                     break;
                 default:
                     cardtitle.value = "Temperature";
@@ -233,6 +236,8 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
     //     }
     // }
 
+    
+
  
     return {  
         payload,
@@ -241,6 +246,8 @@ export const useMqttStore =  defineStore('mqtt', ()=>{
         cardsubtitle,
         cardunit,
         cardunitconvert,
+        altunit,
+        pressureunit,
         unit,
         tempData,
         stateChange,

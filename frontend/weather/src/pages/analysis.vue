@@ -41,16 +41,20 @@
           <h2>Analysis</h2>
           <v-card>
             <v-tabs v-model="tab2" bg-color="#df849c">
-              <v-tab value="Temperature">Temperature, Heat Index & Humidity</v-tab>
-            </v-tabs>
+  <v-tab value="temperature">Temperature & Heat Index</v-tab>
+  <v-tab value="humidity">Humidity</v-tab>
+</v-tabs>
           </v-card>
-          <div class="button-wrapper">
+        <v-tabs-window v-model="tab2">
+          <v-tabs-window-item value="temperature"> 
+            <div class="button-wrapper">
             <v-card class="date-card" outlined @click="startDateDialog = true">
   <v-card-text>
     <p class="date-card-title">Select Start Date</p>
     <p class="date-timestamp" v-if="startDate">
       {{ formatDate(startDate) }}
     </p>
+  
   </v-card-text>
   <v-dialog v-model="startDateDialog" persistent max-width="290">
     <v-card>
@@ -85,6 +89,13 @@
   </v-btn>
 </div>
 <div> <canvas style= "width: 800px;" id="thh"> </canvas></div>
+          </v-tabs-window-item>
+          <v-tabs-window-item value="humidity">
+            <div>  <canvas style= "width: 800px;" id = "humiddata"> </canvas></div>
+    </v-tabs-window-item>
+        
+        </v-tabs-window>
+         
 
         </div>
       </div>
@@ -138,8 +149,13 @@ onMounted(() => {
     thhgraph.data.labels = newTimestamp;
     thhgraph.data.datasets[0].data = newTemp;
     thhgraph.data.datasets[1].data = newHeat;
-    thhgraph.data.datasets[2].data = newHum;
     thhgraph.update();
+  }
+
+  if (humgraph) {
+    humgraph.data.labels = newTimestamp;
+    humgraph.data.datasets[0].data = newHum;
+    humgraph.update();
   }
 }, { deep: true });
 
@@ -152,11 +168,14 @@ onMounted(() => {
   let tempHiGraph =null;
   let soilhumchart = null;
   let thhgraph = null;
+  let humgraph = null;
+
 const startDateDialog = ref(false); // Controls the visibility of the start date picker dialog
     const endDateDialog = ref(false); // Controls the visibility of the end date picker dialog
     const startDate = ref(null); // Stores the selected start date
     const endDate = ref(null); // Stores the selected end date
     const tab = ref("Temperature");
+    const tab2 = ref("Humidity");
     const start = ref(null);
     const timeLabels = ref([]); // Example time labels
 
@@ -187,7 +206,7 @@ const startDateDialog = ref(false); // Controls the visibility of the start date
   App.getAllData(start,end);
 
   console.log(temp.value);
-  console.log(`the valu is ${hum.value}`);
+  console.log(`the value is ${hum.value}`);
 
 
     
@@ -211,6 +230,24 @@ const startDateDialog = ref(false); // Controls the visibility of the start date
   }
 });
 
+  watch(tab2, (newTab) => {
+    if (newTab === 'temperature') {
+      // Wait for DOM update
+      nextTick(() => {
+        if (!thhgraph) {
+          makeanalysisgraph();
+        }
+      });
+    } else if (newTab === 'humidity') {
+      // Wait for DOM update
+      nextTick(() => {
+        if (!humgraph) {
+          makehumanalysisgraph();
+          
+        }
+      });
+    }
+  });
   watch(payload, (newPayload) => {
     console.log(heatIndexData.value);
     const now = new Date();
@@ -309,6 +346,9 @@ const startDateDialog = ref(false); // Controls the visibility of the start date
 
 };
 
+
+
+
 const makeanalysisgraph = () => {
     const thhcanvas = document.getElementById('thh');
   if (thhcanvas) {
@@ -333,11 +373,34 @@ const makeanalysisgraph = () => {
             borderWidth: 2,
             tension: 0.4,
           },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 0
+        }
+      }
+    });
+  }
+
+
+};
+
+const makehumanalysisgraph = () => {
+    const humgj = document.getElementById('humiddata');
+  if (humgj) {
+    humgraph = new Chart(humgj, {
+      type: 'line',
+      data: {
+        labels: timestamp.value,
+        datasets: [
           {
             label: "Humidity (%)", 
             data: hum.value,
-            borderColor: "rgba(255, 99, 132, 1)",
-            backgroundColor: "rgba(255, 99, 132, 0.2)", 
+            borderColor: "rgba(255, 132, 99, 1)",
+            backgroundColor: "rgba(255, 132, 99, 0.2)", 
             borderWidth: 2,
             tension: 0.4,
           },
@@ -355,6 +418,8 @@ const makeanalysisgraph = () => {
 
 
 };
+
+
 
 
 const makesoilgraph = () => {

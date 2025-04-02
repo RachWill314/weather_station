@@ -22,16 +22,19 @@
 #include <rom/rtc.h>
 
 #include <SPI.h>
+//#include <TFT_eSPI.h>  
 #include "Adafruit_GFX.h"
 #include "Adafruit_ILI9341.h"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+//TFT_eSPI tft = TFT_eSPI();
+
 // DEFINE VARIABLES
-#define dhtPin 32
+#define dhtPin 4
 #define dhtType DHT22
-#define soilpin 35
+#define soilpin 32
 
 #define analogPin 14
 #define BTN1 25
@@ -131,10 +134,11 @@ void loop() {
     float p = bmp.readPressure();
     float a = bmp.readAltitude(1014.8);
     int soil = analogRead(soilpin);
+    float soilPercentage = 100 - ((soil / 4095.0) * 100.0);
     // Calculate Heat Index
     float hi = calculateHeatIndex(t, h);
 
-    const char *doc = JsonDoc(t,h,p,a,soil,hi).c_str();
+    const char *doc = JsonDoc(t,h,p,a,soilPercentage,hi).c_str();
     Serial.println(doc);
     bool published = client.publish(pubtopic, doc);
      if(published)
@@ -187,10 +191,21 @@ void displayReadings(float t, float h, float p, float a, float hi, int soil)
     // Clear the screen with a white background
     //tft.fillScreen(ILI9341_WHITE);
 
+    // Colors for each section
+    uint16_t colors[] = {
+        ILI9341_RED,     // Temperature
+        ILI9341_BLUE,    // Humidity
+        ILI9341_GREEN,   // Pressure
+        ILI9341_PURPLE,  // Altitude
+        ILI9341_MAROON,  // Soil
+        ILI9341_ORANGE  // Heat Index
+    };
+
     // Function to draw text with dividers
-    auto drawTextWithDivider = [&](int x, int y, const char* label, float value, const char* unit) {
+    auto drawTextWithDivider = [&](int x, int y, const char* label, float value, const char* unit, uint16_t color) {
+        
         // Set text color and size
-        tft.setTextColor(ILI9341_BLACK, ILI9341_WHITE);
+        tft.setTextColor(color, ILI9341_WHITE);
         tft.setTextSize(2); // Set text size to 2
 
         // Print the label
@@ -205,24 +220,24 @@ void displayReadings(float t, float h, float p, float a, float hi, int soil)
     };
 
     // Draw text with dividers
-    drawTextWithDivider(startX, startY, "Temperature: ", t, "C");
+    drawTextWithDivider(startX, startY, "Temperature: ", t, "C", colors[0]);
     tft.drawLine(startX, startY + rectHeight, startX + rectWidth, startY + rectHeight, ILI9341_BLACK);
 
-    drawTextWithDivider(startX, startY + yGap, "Humidity: ", h, "%");
+    drawTextWithDivider(startX, startY + yGap, "Humidity: ", h, "%", colors[1]);
     tft.drawLine(startX, startY + yGap + rectHeight, startX + rectWidth, startY + yGap + rectHeight, ILI9341_BLACK);
 
-    drawTextWithDivider(startX, startY + 2 * yGap, "Pressure: ", p, "Pa");
+    drawTextWithDivider(startX, startY + 2 * yGap, "Pressure: ", p, "Pa", colors[2]);
     tft.drawLine(startX, startY + 2 * yGap + rectHeight, startX + rectWidth, startY + 2 * yGap + rectHeight, ILI9341_BLACK);
 
-    drawTextWithDivider(startX, startY + 3 * yGap, "Altitude: ", a, "m");
+    drawTextWithDivider(startX, startY + 3 * yGap, "Altitude: ", a, "m" , colors[3]);
     tft.drawLine(startX, startY + 3 * yGap + rectHeight, startX + rectWidth, startY + 3 * yGap + rectHeight, ILI9341_BLACK);
 
     // Convert soil reading
     float soilPercentage = 100 - ((soil / 4095.0) * 100.0);
-    drawTextWithDivider(startX, startY + 4 * yGap, "Soil: ", soilPercentage, "%");
+    drawTextWithDivider(startX, startY + 4 * yGap, "Soil: ", soilPercentage, "%", colors[4]);
     tft.drawLine(startX, startY + 4 * yGap + rectHeight, startX + rectWidth, startY + 4 * yGap + rectHeight, ILI9341_BLACK);
 
-    drawTextWithDivider(startX, startY + 5 * yGap, "Heat Index: ", hi, "");
+    drawTextWithDivider(startX, startY + 5 * yGap, "Heat Index: ", hi, "", colors[5]);
     tft.drawLine(startX, startY + 5 * yGap + rectHeight, startX + rectWidth, startY + 5 * yGap + rectHeight, ILI9341_BLACK);
 }
 
@@ -300,13 +315,13 @@ float calculateHeatIndex(float t, float h)
     return hi;
 }
 
-  String JsonDoc(float t, float h, float p, float a, int soil, float hi){
+  String JsonDoc(float t, float h, float p, float a, int soilPercentage, float hi){
     JsonDocument doc;
     doc["temperature"] = ceil(t * 100.0)/100.0;
     doc["humidity"] = ceil(h * 100.0)/100.0;
     doc["pressure"] = ceil(p * 100.0)/100.0;
     doc["altitude"] = ceil(a * 100.0)/100.0;
-    doc["soil"] = ceil(soil * 100.0)/100.0;
+    doc["soil"] = ceil(soilPercentage * 100.0)/100.0;
     doc["heatindex"] = ceil(hi * 100.0)/100.0;
     String output;
     serializeJson(doc, output);

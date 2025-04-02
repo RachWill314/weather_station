@@ -8,5 +8,5 @@
   //
   setInterval(() => {
   location.reload();
-}, 30000);
+}, 300000);
 </script>

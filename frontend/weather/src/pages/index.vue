@@ -13,22 +13,22 @@
     <div class="content">
       <div class="toggle-switch">
         <label class="switch">
-          <input type="checkbox" v-model="isCelsius.value" @change="toggleTemperatureUnit" class="toggle-input" />
+          <input type="checkbox" v-model="isMetric.value" @change="toggleUnit" class="toggle-input" />
           <span class="slider"></span>
         </label>
-        <p class="toggle-label">{{ isCelsius ? '°C' : '°F' }}</p>
+        <p class="toggle-label">{{ isMetric ? 'Metric' : 'Imperial' }}</p>
       </div>
       <div class="glossy-container">
         <h2>{{ cardtitle }}</h2>
         <p class="large-number">{{cardsubtitle}}{{ cardunit }}</p>
-        <h3 class="subheading">Previous</h3>
-        <div class="previous-box">
-          <div class="temperature">23°C</div>
+        <!--<h3 class="subheading">Previous</h3>
+         <div class="previous-box">
+          <div class="temperature">{{history[0]}}°C</div>
           <div class="divider"></div>
-          <div class="temperature">24°C</div>
+          <div class="temperature">{{history[1]}}°C</div>
           <div class="divider"></div>
-          <div class="temperature">22°C</div>
-        </div>
+          <div class="temperature">{{history[2]}}°C</div>
+        </div>  -->
       </div>
       <div class="weather-icons">
         <div class="circle-container" @click="Mqtt.stateChange(0)">
@@ -43,21 +43,21 @@
             <img src="../assets/weathersym/heat.svg" alt="Heat Index" />
           </div>
           <p class="weather-name">Heat Index</p>
-          <p class="weather-value">{{payload.heatindex}}{{ cardunitconvert }}</p>
+          <p class="weather-value">{{payload.heatindex}}</p>
         </div>
         <div class="circle-container" @click="Mqtt.stateChange(2)">
           <div class="circle">
             <img src="../assets/weathersym/airpressure.svg" alt="Air Pressure" />
           </div>
           <p class="weather-name">Air Pressure</p>
-          <p class="weather-value">{{payload.pressure}} hPa</p>
+          <p class="weather-value">{{payload.pressure}} {{ pressureunit }}</p>
         </div>
         <div class="circle-container" @click="Mqtt.stateChange(3)">
           <div class="circle">
             <img src="../assets/weathersym/altitude.svg" alt="Altitude" />
           </div>
           <p class="weather-name">Altitude</p>
-          <p class="weather-value">{{payload.altitude}} m</p>
+          <p class="weather-value">{{payload.altitude}} {{ altunit }}</p>
         </div>
         <div class="circle-container" @click="Mqtt.stateChange(1)">
           <div class="circle">
@@ -97,7 +97,7 @@ const router = useRouter();
 const route = useRoute();
 const Mqtt = useMqttStore();
 
-const { payload, payloadTopic, cardtitle, cardsubtitle, cardunit, cardunitconvert , tempData} =  storeToRefs(Mqtt);
+const { payload, payloadTopic, cardtitle, cardsubtitle, cardunit, cardunitconvert , altunit, pressureunit, tempData} =  storeToRefs(Mqtt);
 const host= ref("broker.emqx.io");
 const port= ref(9002);
 const point= ref(10);
@@ -107,33 +107,73 @@ let isActive = ref(false);
 // Method to navigate to the Home page
 
 // Reactive state for toggle switch
-const isCelsius = ref(true);
+const isMetric = ref(true);
+
+const history =ref([0,0,0]);
 
 watch(payload, (newVal, oldVal) => {
-  if(isCelsius.value==false && cardunit.value=="°C"){
+  // history.value = [...history.value, payload.value.temperature]
+  // history.value.pop(0)
+  if(isMetric.value==false){
     payload.value.temperature = Number(((payload.value.temperature * 9/5) + 32).toFixed(2));
     payload.value.heatindex = Number(((payload.value.heatindex * 9/5) + 32).toFixed(2));
-    cardunit.value = "°F";
+    // Pressure conversion (hPa to psi)
+    payload.value.pressure = Number((payload.value.pressure * 0.01450).toFixed(2));
+    // Altitude conversion (meters to feet)
+    payload.value.altitude = Number((payload.value.altitude * 3.28084).toFixed(2));
     cardunitconvert.value = "°F";
-    cardsubtitle.value = payload.value.temperature;
+    altunit.value = "ft";
+    pressureunit.value = "psi";
+
+    // Update card subtitle based on current displayed value
+    switch(cardtitle.value) {
+      case "Temperature":
+        cardsubtitle.value = payload.value.temperature;
+        cardunit.value = "°F";
+        break;
+      case "Heat Index":
+        cardsubtitle.value = payload.value.heatindex;
+        cardunit.value = " ";
+        break;
+      case "Air Pressure":
+        cardsubtitle.value = payload.value.pressure;
+        cardunit.value = "psi";
+        break;
+      case "Altitude":
+        cardsubtitle.value = payload.value.altitude;
+        cardunit.value = "ft";
+        break;
+      default:
+        cardsubtitle.value = payload.value.temperature;
+        cardunit.value = "°F";
+    }
+
+    //cardsubtitle.value = payload.value.temperature;
   }else {
     cardunitconvert.value = "°C";
-
+    altunit.value = "m";
+    pressureunit.value = "hPa";
   }
   });
 
-//Method to toggle temperature unit
-const toggleTemperatureUnit = () => {
-  isCelsius.value = !isCelsius.value;
-  if(isCelsius.value==false && cardunit.value=="°C"){
+//Method to toggle unit
+const toggleUnit = () => {
+  isMetric.value = !isMetric.value;
+  if(isMetric.value==false && cardunit.value=="°C"){
     payload.value.temperature = Number(((payload.value.temperature * 9/5) + 32).toFixed(2));
     payload.value.heatindex = Number(((payload.value.heatindex * 9/5) + 32).toFixed(2));
+    payload.value.pressure = Number((payload.value.pressure * 0.01450).toFixed(2));
+    payload.value.altitude = Number((payload.value.altitude * 3.28084).toFixed(2));
+
     cardunit.value = "°F";
     cardunitconvert.value = "°F";
+    altunit.value = "ft";
+    pressureunit.value = "psi";
     cardsubtitle.value = payload.value.temperature;
   }else {
     cardunitconvert.value = "°C";
-
+    altunit.value = "m";
+    pressureunit.value = "hPa";
   }
 };
 
@@ -225,7 +265,8 @@ onMounted(() => {
 }
 
 .glossy-container {
-  width: 300px;
+  width: 400px;
+  height: 300px;
   padding: 20px;
   margin: 20px auto;
   margin-bottom: 70px; /* Additional margin at the bottom */
@@ -238,13 +279,14 @@ onMounted(() => {
 
 .glossy-container h2 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 2rem;
+  font-family:'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
   color: white; /* Darker text for contrast */
   text-align: center;
 }
 
 .glossy-container .large-number {
-  margin: 10px 0 0;
+  margin: 40px 0 0;
   font-size: 5rem;
   font-weight: bold;
   color: whitesmoke; /* Slightly darker text for the number */
